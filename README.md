@@ -30,6 +30,12 @@ Train Q-learning once and compare it with the rule-based baseline (about 3 minut
 python src/training.py
 ```
 
+Tune Q-learning (21 training runs in parallel plus a 5-seed confirmation, about 10 minutes on 32 cores):
+
+```bash
+python src/tuning.py
+```
+
 ## Project structure
 
 | Path | Contents |
@@ -42,6 +48,7 @@ python src/training.py
 | `src/agent_common.py` | Shared tabular agent parts (Q-table, epsilon-greedy) |
 | `src/q_learning.py` | Q-learning agent |
 | `src/training.py` | Training and evaluation loops |
+| `src/tuning.py` | One-at-a-time hyperparameter tuning, scored on validation days |
 | `tests/` | Sanity checks |
 
 The files in `src/` are assembled into the final notebook, one file per notebook section.
