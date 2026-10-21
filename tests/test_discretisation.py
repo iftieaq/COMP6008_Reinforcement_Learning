@@ -66,4 +66,4 @@ def test_ev_status_covers_every_case():
 def test_state_key_has_expected_shape():
     state = discretise_observation(make_observation())
     # (battery_bin, solar_bin, load_bin, time_step, ev_status)
-    assert state == (2, 2, 0, 24, EV_STATUS_MODERATE)
+    assert state == (5, 2, 0, 24, EV_STATUS_MODERATE)

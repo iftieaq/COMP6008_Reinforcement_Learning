@@ -144,7 +144,7 @@ NUMBER_OF_TEST_DAYS = 200
 # State discretisation for the tabular agents
 # ---------------------------------------------------------------------------
 
-SOC_BIN_EDGES = [0.2, 0.4, 0.6, 0.8]          # 5 bins
+BATTERY_SOC_BIN_EDGES = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]   # 10 bins of 10%
 SOLAR_BIN_EDGES_KWH = [0.05, 0.8, 1.6]        # none, low, medium, high
 LOAD_BIN_EDGES_KWH = [0.3, 0.6]               # low, medium, high
 
@@ -168,8 +168,8 @@ DEFAULT_AGENT_SETTINGS = {
     "learning_rate": 0.1,
     "discount_factor": 0.99,
     "epsilon_start": 1.0,
-    "epsilon_decay": 0.99998,  # reaches about 0.05 after 150,000 episodes
+    "epsilon_decay": 0.99999,  # reaches about 0.05 after 300,000 episodes
     "epsilon_min": 0.01,
 }
 
-DEFAULT_TRAINING_EPISODES = 200_000
+DEFAULT_TRAINING_EPISODES = 400_000

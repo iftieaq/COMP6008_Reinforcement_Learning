@@ -24,6 +24,7 @@ from config import (
     BATTERY_CHARGE_EFFICIENCY,
     BATTERY_DISCHARGE,
     BATTERY_MAX_ENERGY_PER_STEP_KWH,
+    BATTERY_SOC_BIN_EDGES,
     BATTERY_WEAR_WEIGHT,
     EV_CAPACITY_KWH,
     EV_MAX_ENERGY_PER_STEP_KWH,
@@ -44,7 +45,6 @@ from config import (
     NUMBER_OF_ACTIONS,
     PEAK_IMPORT_THRESHOLD_KWH,
     PEAK_IMPORT_WEIGHT,
-    SOC_BIN_EDGES,
     SOLAR_BIN_EDGES_KWH,
     STEPS_PER_DAY,
     UNCERTAINTY_LEVELS,
@@ -399,7 +399,7 @@ def discretise_observation(observation):
     Returns:
         Tuple (battery_bin, solar_bin, load_bin, time_step, ev_status).
     """
-    battery_bin = find_bin(observation["battery_soc"], SOC_BIN_EDGES)
+    battery_bin = find_bin(observation["battery_soc"], BATTERY_SOC_BIN_EDGES)
     solar_bin = find_bin(observation["solar_kwh"], SOLAR_BIN_EDGES_KWH)
     load_bin = find_bin(observation["load_kwh"], LOAD_BIN_EDGES_KWH)
     ev_status = find_ev_status(observation)

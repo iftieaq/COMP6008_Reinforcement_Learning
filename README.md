@@ -24,7 +24,7 @@ Run the tests (environment, discretisation, baseline, Q-learning):
 python -m pytest
 ```
 
-Train Q-learning once and compare it with the rule-based baseline (about 80 seconds):
+Train Q-learning once and compare it with the rule-based baseline (about 3 minutes):
 
 ```bash
 python src/training.py

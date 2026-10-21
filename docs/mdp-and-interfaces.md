@@ -1,6 +1,6 @@
 # MDP Specification and Shared Interfaces
 
-**Status:** v2, 21 October 2026 (v2 changes: EV status now based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
+**Status:** v3, 21 October 2026 (v2: EV status based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11. v3: battery SOC in 10 bins and 400,000 training episodes, section 6). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
 
 **Purpose:** a single reference for how the household environment works and how every component connects, so that the three agents, the baseline, the scenario generator and the analysis can be written in parallel and still fit together.
 
@@ -140,7 +140,7 @@ A shared discretiser turns an observation into a tuple of bin numbers. That tupl
 
 | Variable | Bins | Edges |
 |---|---|---|
-| Battery SOC | 5 | 0-20%, 20-40%, 40-60%, 60-80%, 80-100% |
+| Battery SOC | 10 | 0-10%, 10-20%, ..., 90-100% |
 | Solar | 4: none, low, medium, high | below 0.05, below 0.8, below 1.6, 1.6 and above (kWh per step) |
 | Load | 3: low, medium, high | below 0.3, below 0.6, 0.6 and above (kWh per step) |
 | Time | 48 | One per timestep (the terminal value 48 is never used in a learning update) |
@@ -163,7 +163,19 @@ State key: `(battery_bin, solar_bin, load_bin, time_step, ev_status)`.
 
 **Why slack instead of the plan's separate EV SOC and deadline variables.** The first version used the plan's design: EV SOC in 5 bins plus a 3-level deadline (far, medium, near). With it, Q-learning met the EV target on only about 55% of test days (medium uncertainty, test reward about -6.3 against the baseline's -2.95), because 20% SOC bins and 3 deadline bins together cannot tell the agent whether the target is still reachable. Slack combines both into exactly that information. With slack, Q-learning met the target on about 99% of test days (test reward about -3.4 after 200,000 episodes). This is a documented design iteration for the report.
 
-**Size.** The full product is 5 × 4 × 3 × 48 × 6 = 17,280 states, but many combinations cannot happen (for example, high solar at night). Q-learning visits about 2,200 distinct states in 200,000 training episodes. The Q-table is stored as a dictionary, so only visited states use memory.
+**Why 10 battery bins instead of 5.** With 5 bins (20% wide), one charging step stores about 1.19 kWh, only 12% of the battery, so about half the time charging does not change the agent's state and it cannot see what charging achieved. Q-learning then barely used the battery (about 3.7 kWh charged per day against the baseline's 14.0) and lost on grid cost. Results on 100 held-out validation days (medium uncertainty, default hyperparameters, 3 seeds; baseline reward -3.21, cost $2.57):
+
+| Battery bins | Training episodes | Reward | Grid cost | EV target met |
+|---|---|---|---|---|
+| 5 | 200,000 | -3.92 | $3.13 | 96% |
+| 5 | 400,000 | -3.94 | $3.40 | 98% |
+| 10 | 200,000 | -3.34 | $2.33 | 93% |
+| 20 | 200,000 | -3.85 | $2.29 | 90% |
+| 10 | 400,000 | -2.78 | $2.19 | 98.7% |
+
+Ten bins let the agent see the effect of each charging step; twenty bins create so many states that each is visited too rarely and EV learning suffers. The larger state space needs more training (400,000 episodes), while longer training alone does not help 5 bins. This is the second documented design iteration for the report.
+
+**Size.** The full product is 10 × 4 × 3 × 48 × 6 = 34,560 states, but many combinations cannot happen (for example, high solar at night). Q-learning visits about 4,400 distinct states in 400,000 training episodes. The Q-table is stored as a dictionary, so only visited states use memory.
 
 ---
 
