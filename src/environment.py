@@ -392,7 +392,9 @@ def ev_steps_needed_to_reach_target(ev_soc):
         Number of steps, rounded up (0 if the target is already met).
     """
     energy_needed_kwh = max(0.0, (EV_TARGET_SOC - ev_soc) * EV_CAPACITY_KWH)
-    return math.ceil(energy_needed_kwh / EV_MAX_ENERGY_PER_STEP_KWH)
+    steps_needed = energy_needed_kwh / EV_MAX_ENERGY_PER_STEP_KWH
+    # Round away tiny floating-point errors first, e.g. 6.000000000000001 must count as 6
+    return math.ceil(round(steps_needed, 6))
 
 
 def find_ev_status(observation):

@@ -38,6 +38,7 @@ All numeric values below are proposed defaults. They live in one configuration f
 | $\lambda_2$ (EV shortfall weight) | $1.00 per kWh below target at departure | |
 | $\lambda_3$ (peak weight) | $0.50 per kWh above the peak threshold | |
 | Leftover battery value $v$ | $0.28 per kWh left in the battery at the end of the day | Import price minus the wear of using it later |
+| Next night's energy need $E_\text{night}$ | 3.4 kWh | Nominal load from 00:00 to 07:00; leftover energy above this has no value |
 
 "State of charge" (SOC) means how full a battery is, as a fraction from 0 to 1.
 
@@ -118,7 +119,7 @@ where $\text{leftover}_t = v \cdot \min(E^\text{bat}_{48},\ E_\text{night})$ at 
 
 Each part is also returned separately in `info` (section 8) so the analysis can show what drove the reward.
 
-**Why the leftover battery term.** The episode ends at midnight, but the house does not: energy left in the battery covers the next night's demand. Without this term the end of the day is worth nothing, and Q-learning learned to run the battery empty by midnight (0.05 kWh left on average, against 1.5 kWh for the baseline). About 1.5 kWh, worth roughly $0.45 a day, was used "for free", which was almost the whole of its apparent advantage over the baseline. The value $v$ is the import price ($0.30) minus the wear of discharging it later ($0.02), so keeping a kWh until tomorrow is worth the same as using it tonight. With this term, on 100 validation days at medium uncertainty, the baseline scores -2.57 and Q-learning -2.74 ± 0.14 (3 seeds).
+**Why the leftover battery term.** The episode ends at midnight, but the house does not: energy left in the battery covers the next night's demand. Without this term the end of the day is worth nothing, and Q-learning learned to run the battery empty by midnight (0.05 kWh left on average, against 1.5 kWh for the baseline). About 1.5 kWh, worth roughly $0.45 a day, was used "for free", which was almost the whole of its apparent advantage over the baseline. The value $v$ is the import price ($0.30) minus the wear of discharging it later ($0.02), so keeping a kWh until tomorrow is worth the same as using it tonight. With this term (measured with v5, before the usual-departure change), on 100 validation days at medium uncertainty, the baseline scored -2.57 and Q-learning -2.74 ± 0.14 (3 seeds).
 
 **Why the cap at the next night's need.** Without a cap, buying a kWh at $0.30 and holding it to midnight earned $0.28, so filling the battery from the grid in the evening was almost free. Some training runs did this and others did not, which made grid costs swing widely (for example $1.43 against $2.77 for nearly the same reward). Energy above about 3.4 kWh would be replaced by tomorrow's solar anyway, so it is given no value.
 
@@ -169,7 +170,9 @@ $$\text{slack} = \text{expected\_steps\_to\_departure} - \left\lceil \frac{(\tex
 
 State key: `(battery_bin, solar_bin, load_bin, time_step, ev_status)`.
 
-**Why slack instead of the plan's separate EV SOC and deadline variables.** The first version used the plan's design: EV SOC in 5 bins plus a 3-level deadline (far, medium, near). With it, Q-learning met the EV target on only about 55% of test days (medium uncertainty, test reward about -6.3 against the baseline's -2.95), because 20% SOC bins and 3 deadline bins together cannot tell the agent whether the target is still reachable. Slack combines both into exactly that information. With slack, Q-learning met the target on about 99% of test days (test reward about -3.4 after 200,000 episodes). This is a documented design iteration for the report.
+**Why slack instead of the plan's separate EV SOC and deadline variables.** The first version used the plan's design: EV SOC in 5 bins plus a 3-level deadline (far, medium, near). With it, Q-learning met the EV target on only about 55% of days (medium uncertainty, reward about -6.3 against the baseline's -2.95), because 20% SOC bins and 3 deadline bins together cannot tell the agent whether the target is still reachable. Slack combines both into exactly that information. With slack, Q-learning met the target on about 99% of days (reward about -3.4 after 200,000 episodes). This is a documented design iteration for the report.
+
+*Note on historical numbers:* the evidence in this section and in section 5 was measured with the version of the environment, reward and baseline current at the time (stated in each paragraph). The reasoning still holds, but the exact numbers would change if re-run. Any number used in the report or presentation must be re-produced by the final notebook.
 
 **Why the usual departure time instead of the actual one.** Slack first used each day's actual departure, which assumes the controller knows exactly when the car will leave. In practice a charger knows the household's usual time, and the car sometimes leaves earlier. Since v6 the agent and the baseline both see only the usual departure (17:00); the car still leaves at its actual time, and any shortfall is penalised then. Results on 100 validation days (3 seeds for Q-learning):
 
@@ -210,7 +213,7 @@ One day profile fully describes the random parts of one episode:
 | `ev_arrival_step` | int | First step the EV is plugged in |
 | `ev_departure_step` | int | First step the EV is gone. It is plugged in for steps `arrival` to `departure - 1` |
 | `ev_arrival_soc` | float, 0 to 1 | EV SOC when it arrives |
-| `ev_target_soc` | float, 0 to 1 | EV SOC required at departure (0.8) |
+| `ev_target_soc` | float, 0 to 1 | EV SOC required at departure. Must equal `EV_TARGET_SOC` (0.8): the agent's slack and the baseline assume this fixed target |
 | `initial_battery_soc` | float, 0 to 1 | Home battery SOC at 00:00 |
 
 Constraint: `0 <= ev_arrival_step < ev_departure_step <= 48`.
@@ -286,7 +289,8 @@ observation_space  = Dict (fields in section 6)
 | `ev_shortfall_kwh` | kWh below target at departure (0 at other steps) |
 | `peak_excess_kwh` | Import above the peak threshold |
 | `reward_grid`, `reward_wear`, `reward_ev`, `reward_peak`, `reward_leftover_battery` | The five reward parts. They add up to `reward` |
-| `battery_soc`, `ev_soc`, `solar_kwh`, `load_kwh`, `time_step` | Values for the step just simulated, for example-day plots |
+| `solar_kwh`, `load_kwh`, `time_step` | Values for the step just simulated, for example-day plots |
+| `battery_soc`, `ev_soc` | Battery and EV state of charge at the end of the step just simulated |
 
 ---
 
@@ -295,7 +299,7 @@ observation_space  = Dict (fields in section 6)
 Every agent class provides the same methods, so one training loop and one evaluation loop work for all three. The shared parts (Q-table, epsilon-greedy selection, epsilon decay) are written once in `src/agent_common.py`. Each agent only adds its own update rule.
 
 ```
-Agent(n_actions, learning_rate, discount_factor,
+Agent(number_of_actions, learning_rate, discount_factor,
       epsilon_start, epsilon_decay, epsilon_min, seed)
 
 select_action(state, explore=True) -> action
@@ -310,11 +314,11 @@ end_episode()
     Decays epsilon: epsilon = max(epsilon_min, epsilon * epsilon_decay).
 
 q_table
-    Dictionary from state key to an array of n_actions Q-values (zeros for
-    unseen states).
+    Dictionary from state key to an array of number_of_actions Q-values
+    (zeros for unseen states).
 ```
 
-`state` is any hashable value: the discretised tuple for our environment, or a plain integer for small Gymnasium test environments such as `CliffWalking-v0`. Agents never see raw observations.
+`state` is any hashable value: the discretised tuple for our environment, or a plain integer for small Gymnasium test environments such as `CliffWalking-v1`. Agents never see raw observations.
 
 `learn` returns the next action because the agents choose it at different points: SARSA must choose the next action before its update (the update uses it), while Q-learning and Expected SARSA choose it after their update. Letting each agent decide keeps the training loop identical for all three and keeps each agent faithful to its own pseudocode.
 
@@ -361,7 +365,7 @@ The two decisions are combined into one of the six action IDs. In words: use sol
 
 $$\underbrace{0.95 \times 1.25 \times 0.30}_{\text{stored energy, used later}} > \underbrace{0.30\,(1.25 - s)}_{\text{grid top-up}} + \underbrace{0.05\,s}_{\text{lost export}} + \underbrace{0.02\,(1.25 + 0.95 \times 1.25)}_{\text{wear in and out}}$$
 
-which holds when $s$ is more than about 0.27 kWh, rounded to 0.3. The first version charged on any surplus, which made the baseline buy grid energy to fill the battery whenever solar was barely above load (mostly 07:00 to 09:00). Fixing this strengthens the baseline (development check, medium uncertainty, 100 validation days: reward -3.21 to -2.99, grid cost $2.57 to $2.38, EV target still met on every day). A second candidate change, not letting the battery supply EV charging unless the deadline is urgent, was tested and rejected because it made the baseline worse (reward -3.78).
+which holds when $s$ is more than about 0.27 kWh, rounded to 0.3. The first version charged on any surplus, which made the baseline buy grid energy to fill the battery whenever solar was barely above load (mostly 07:00 to 09:00). Fixing this strengthens the baseline (medium uncertainty, 100 validation days, reward from v4: reward -3.21 to -2.99, grid cost $2.57 to $2.38, EV target still met on every day). A second candidate change, not letting the battery supply EV charging unless the deadline is urgent, was tested and rejected because it made the baseline worse (reward -3.78).
 
 ---
 
@@ -388,6 +392,6 @@ Rules that keep the move into the notebook simple:
 - A file may only import from files above it in this table.
 - Import our own modules in one style only, for example `from config import BATTERY_CAPACITY_KWH`, so these lines can be deleted when the code moves into the notebook.
 - No code runs on import. Demos and quick checks go under `if __name__ == "__main__":` or in separate test files.
-- Each file starts with a short author line, which becomes the `**Author: Name**` markdown cell the guideline requires.
+- Author names are not written in the code files. When the notebook is assembled, each section gets an `**Author: Name**` markdown cell, as the guideline requires.
 - All final results, plots and tables are produced in the notebook, because the guideline gives zero marks for results that appear in the presentation or report but not in the notebook.
 - Any text that goes into the notebook or report (markdown, plot titles, captions) is plain and clear and does not use em dashes.

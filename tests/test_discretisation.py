@@ -50,6 +50,8 @@ def test_steps_needed_to_reach_target():
     assert ev_steps_needed_to_reach_target(0.9) == 0
     # 30% of 60 kWh = 18 kWh, at 3.5 kWh per step = 5.14, rounded up to 6
     assert ev_steps_needed_to_reach_target(0.5) == 6
+    # 35% of 60 kWh = exactly 21 kWh = exactly 6 steps (floating-point gives 6.000000000000001)
+    assert ev_steps_needed_to_reach_target(0.45) == 6
 
 
 def test_ev_status_covers_every_case():

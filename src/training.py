@@ -6,8 +6,9 @@ baseline, so every controller is trained and tested in exactly the same way.
 
 - train_agent() runs many training episodes and records each episode's total
   reward (for learning curves).
-- evaluate_controller() runs a controller on a fixed list of test days without
-  learning and records per-day results (for comparison tables).
+- evaluate_controller() runs a controller on a fixed list of days (development,
+  validation or test) without learning and records per-day results (for
+  comparison tables).
 """
 
 import numpy as np
@@ -125,7 +126,7 @@ class GreedyAgentController:
 
 def run_evaluation_episode(env, controller, profile):
     """
-    Run one test day with a controller, without any learning.
+    Run one fixed day with a controller, without any learning.
 
     Args:
         env: a HouseholdEnergyEnv.
@@ -160,7 +161,7 @@ def run_evaluation_episode(env, controller, profile):
 
 def evaluate_controller(env, controller, profiles):
     """
-    Evaluate a controller on a list of test days.
+    Evaluate a controller on a fixed list of days.
 
     Args:
         env: a HouseholdEnergyEnv.
@@ -175,7 +176,7 @@ def evaluate_controller(env, controller, profiles):
 
 def average_results(day_results):
     """
-    Average each result over all test days.
+    Average each result over all evaluated days.
 
     Args:
         day_results: list of daily result dicts from evaluate_controller.
