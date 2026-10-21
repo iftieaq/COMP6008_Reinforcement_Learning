@@ -1,6 +1,6 @@
 # MDP Specification and Shared Interfaces
 
-**Status:** v3, 21 October 2026 (v2: EV status based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11. v3: battery SOC in 10 bins and 400,000 training episodes, section 6. v4: new test seed range and development days, section 7; baseline charges the battery only on a worthwhile surplus, section 10). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
+**Status:** v5, 21 October 2026 (v2: EV status based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11. v3: battery SOC in 10 bins and 400,000 training episodes, section 6. v4: new test seed range and development days, section 7; baseline charges the battery only on a worthwhile surplus, section 10. v5: value of energy left in the battery at the end of the day, section 5). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
 
 **Purpose:** a single reference for how the household environment works and how every component connects, so that the three agents, the baseline, the scenario generator and the analysis can be written in parallel and still fit together.
 
@@ -37,6 +37,7 @@ All numeric values below are proposed defaults. They live in one configuration f
 | $\lambda_1$ (battery wear weight) | $0.02 per kWh of battery throughput | |
 | $\lambda_2$ (EV shortfall weight) | $1.00 per kWh below target at departure | |
 | $\lambda_3$ (peak weight) | $0.50 per kWh above the peak threshold | |
+| Leftover battery value $v$ | $0.28 per kWh left in the battery at the end of the day | Import price minus the wear of using it later |
 
 "State of charge" (SOC) means how full a battery is, as a fraction from 0 to 1.
 
@@ -103,7 +104,9 @@ $$\text{import}_t = \max(0, \text{net}_t), \qquad \text{export}_t = \max(0, -\te
 
 ## 5. Reward
 
-$$R_t = -\big(\text{import}_t \cdot p^\text{import}_t - \text{export}_t \cdot p^\text{export}_t\big) - \lambda_1 \big(E^\text{bat}_\text{charge} + E^\text{bat}_\text{discharge}\big) - \lambda_2\, \text{shortfall}_t - \lambda_3 \max\big(0,\ \text{import}_t - \text{threshold}\big)$$
+$$R_t = -\big(\text{import}_t \cdot p^\text{import}_t - \text{export}_t \cdot p^\text{export}_t\big) - \lambda_1 \big(E^\text{bat}_\text{charge} + E^\text{bat}_\text{discharge}\big) - \lambda_2\, \text{shortfall}_t - \lambda_3 \max\big(0,\ \text{import}_t - \text{threshold}\big) + \text{leftover}_t$$
+
+where $\text{leftover}_t = v \cdot E^\text{bat}_{48}$ at the last timestep ($t = 47$) and 0 at every other step.
 
 | Term | Meaning |
 |---|---|
@@ -111,8 +114,11 @@ $$R_t = -\big(\text{import}_t \cdot p^\text{import}_t - \text{export}_t \cdot p^
 | Wear term | Penalises moving energy in or out of the battery |
 | EV shortfall | kWh below the EV target. Non-zero only at the EV's last plugged-in step (`departure_step - 1`), computed after that step's charging |
 | Peak term | Penalises importing more than 4.0 kWh in one half hour |
+| Leftover battery | Rewards energy still stored at the end of the day, at the last step only |
 
 Each part is also returned separately in `info` (section 8) so the analysis can show what drove the reward.
+
+**Why the leftover battery term.** The episode ends at midnight, but the house does not: energy left in the battery covers the next night's demand. Without this term the end of the day is worth nothing, and Q-learning learned to run the battery empty by midnight (0.05 kWh left on average, against 1.5 kWh for the baseline). About 1.5 kWh, worth roughly $0.45 a day, was used "for free", which was almost the whole of its apparent advantage over the baseline. The value $v$ is the import price ($0.30) minus the wear of discharging it later ($0.02), so keeping a kWh until tomorrow is worth the same as using it tonight. With this term, on 100 validation days at medium uncertainty, the baseline scores -2.57 and Q-learning -2.74 ± 0.14 (3 seeds).
 
 ---
 
@@ -267,7 +273,7 @@ observation_space  = Dict (fields in section 6)
 | `ev_charge_kwh` | Actual energy put into the EV |
 | `ev_shortfall_kwh` | kWh below target at departure (0 at other steps) |
 | `peak_excess_kwh` | Import above the peak threshold |
-| `reward_grid`, `reward_wear`, `reward_ev`, `reward_peak` | The four reward parts. They add up to `reward` |
+| `reward_grid`, `reward_wear`, `reward_ev`, `reward_peak`, `reward_leftover_battery` | The five reward parts. They add up to `reward` |
 | `battery_soc`, `ev_soc`, `solar_kwh`, `load_kwh`, `time_step` | Values for the step just simulated, for example-day plots |
 
 ---

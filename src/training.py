@@ -28,6 +28,7 @@ SUMMED_INFO_KEYS = [
     "reward_wear",
     "reward_ev",
     "reward_peak",
+    "reward_leftover_battery",
 ]
 
 

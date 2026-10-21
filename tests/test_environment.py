@@ -13,6 +13,7 @@ from config import (
     BATTERY_MAX_ENERGY_PER_STEP_KWH,
     EV_CAPACITY_KWH,
     EV_MAX_ENERGY_PER_STEP_KWH,
+    LEFTOVER_BATTERY_VALUE_PER_KWH,
     NUMBER_OF_ACTIONS,
     STEPS_PER_DAY,
 )
@@ -104,7 +105,8 @@ def test_battery_never_exports_to_grid(seed):
 def test_reward_parts_add_up(seed):
     env, steps = run_random_day("medium", seed)
     for observation, action, reward, info in steps:
-        reward_parts = info["reward_grid"] + info["reward_wear"] + info["reward_ev"] + info["reward_peak"]
+        reward_parts = (info["reward_grid"] + info["reward_wear"] + info["reward_ev"]
+                        + info["reward_peak"] + info["reward_leftover_battery"])
         assert reward == pytest.approx(reward_parts, abs=TOLERANCE)
 
 
@@ -145,3 +147,14 @@ def test_test_days_differ_from_development_days():
     development_day = generate_development_profiles("medium", 1)[0]
     test_day = generate_test_profiles("medium", 1)[0]
     assert development_day.ev_arrival_soc != test_day.ev_arrival_soc
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_leftover_battery_is_valued_only_at_end_of_day(seed):
+    env, steps = run_random_day("medium", seed)
+    for observation, action, reward, info in steps[:-1]:
+        assert info["reward_leftover_battery"] == 0.0
+
+    last_info = steps[-1][3]
+    leftover_kwh = env.battery_energy_kwh
+    assert last_info["reward_leftover_battery"] == pytest.approx(leftover_kwh * LEFTOVER_BATTERY_VALUE_PER_KWH)

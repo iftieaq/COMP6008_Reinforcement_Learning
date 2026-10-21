@@ -79,6 +79,9 @@ BATTERY_WEAR_WEIGHT = 0.02   # lambda_1, $ per kWh moved in or out of the batter
 EV_SHORTFALL_WEIGHT = 1.00   # lambda_2, $ per kWh below the EV target at departure
 PEAK_IMPORT_WEIGHT = 0.50    # lambda_3, $ per kWh imported above the peak threshold
 
+# Energy left in the battery at midnight saves buying it the next night, minus the wear of using it
+LEFTOVER_BATTERY_VALUE_PER_KWH = IMPORT_PRICE_PER_KWH[0] - BATTERY_WEAR_WEIGHT
+
 
 # ---------------------------------------------------------------------------
 # Actions: action ID -> (battery command, charge the EV?)

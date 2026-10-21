@@ -41,6 +41,7 @@ from config import (
     EV_TIGHT_MIN_SLACK,
     EXPORT_PRICE_PER_KWH,
     IMPORT_PRICE_PER_KWH,
+    LEFTOVER_BATTERY_VALUE_PER_KWH,
     LOAD_BIN_EDGES_KWH,
     NUMBER_OF_ACTIONS,
     PEAK_IMPORT_THRESHOLD_KWH,
@@ -167,7 +168,8 @@ class HouseholdEnergyEnv(gym.Env):
         reward_wear = -BATTERY_WEAR_WEIGHT * (battery_charge_kwh + battery_discharge_kwh)
         reward_ev = -EV_SHORTFALL_WEIGHT * ev_shortfall_kwh
         reward_peak = -PEAK_IMPORT_WEIGHT * peak_excess_kwh
-        reward = reward_grid + reward_wear + reward_ev + reward_peak
+        reward_leftover_battery = self._leftover_battery_value(time_step)
+        reward = reward_grid + reward_wear + reward_ev + reward_peak + reward_leftover_battery
 
         info = {
             "grid_import_kwh": grid_import_kwh,
@@ -182,6 +184,7 @@ class HouseholdEnergyEnv(gym.Env):
             "reward_wear": reward_wear,
             "reward_ev": reward_ev,
             "reward_peak": reward_peak,
+            "reward_leftover_battery": reward_leftover_battery,
             "battery_soc": self.battery_energy_kwh / BATTERY_CAPACITY_KWH,
             "ev_soc": self.ev_energy_kwh / EV_CAPACITY_KWH if ev_plugged_in else 0.0,
             "solar_kwh": solar_kwh,
@@ -277,6 +280,25 @@ class HouseholdEnergyEnv(gym.Env):
 
         target_energy_kwh = self.profile.ev_target_soc * EV_CAPACITY_KWH
         return max(0.0, target_energy_kwh - self.ev_energy_kwh)
+
+    def _leftover_battery_value(self, time_step):
+        """
+        Value the energy left in the battery at the end of the day.
+
+        Without this, energy left at midnight would be worth nothing to the
+        agent, so it would learn to run the battery empty. In a real house that
+        energy covers the next night's demand.
+
+        Args:
+            time_step: the current timestep.
+
+        Returns:
+            Stored energy times LEFTOVER_BATTERY_VALUE_PER_KWH at the last
+            timestep of the day, else 0.
+        """
+        if time_step != STEPS_PER_DAY - 1:
+            return 0.0
+        return self.battery_energy_kwh * LEFTOVER_BATTERY_VALUE_PER_KWH
 
     def _get_observation(self):
         """
