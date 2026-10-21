@@ -14,6 +14,8 @@ from config import (
     EV_CAPACITY_KWH,
     EV_MAX_ENERGY_PER_STEP_KWH,
     LEFTOVER_BATTERY_VALUE_PER_KWH,
+    NEXT_NIGHT_ENERGY_NEED_KWH,
+    NOMINAL_EV_DEPARTURE_STEP,
     NUMBER_OF_ACTIONS,
     STEPS_PER_DAY,
 )
@@ -156,5 +158,29 @@ def test_leftover_battery_is_valued_only_at_end_of_day(seed):
         assert info["reward_leftover_battery"] == 0.0
 
     last_info = steps[-1][3]
-    leftover_kwh = env.battery_energy_kwh
-    assert last_info["reward_leftover_battery"] == pytest.approx(leftover_kwh * LEFTOVER_BATTERY_VALUE_PER_KWH)
+    useful_leftover_kwh = min(env.battery_energy_kwh, NEXT_NIGHT_ENERGY_NEED_KWH)
+    assert last_info["reward_leftover_battery"] == pytest.approx(useful_leftover_kwh * LEFTOVER_BATTERY_VALUE_PER_KWH)
+
+
+def test_leftover_battery_value_is_capped_at_next_night_need():
+    env = HouseholdEnergyEnv("low")
+    env.reset(seed=0)
+    env.battery_energy_kwh = 9.0
+    assert env._leftover_battery_value(STEPS_PER_DAY - 1) == pytest.approx(
+        NEXT_NIGHT_ENERGY_NEED_KWH * LEFTOVER_BATTERY_VALUE_PER_KWH)
+
+
+def test_agent_sees_usual_departure_not_actual():
+    env = HouseholdEnergyEnv("high")
+    env.reset(seed=0)
+    env.profile.ev_arrival_step = 16
+    env.profile.ev_departure_step = 31   # leaves earlier than the usual 17:00
+
+    env.time_step = 28
+    observation = env._get_observation()
+    assert observation["expected_steps_to_departure"] == NOMINAL_EV_DEPARTURE_STEP - 28
+
+    env.profile.ev_departure_step = 37   # leaves later than usual
+    env.time_step = 35
+    observation = env._get_observation()
+    assert observation["expected_steps_to_departure"] == 1

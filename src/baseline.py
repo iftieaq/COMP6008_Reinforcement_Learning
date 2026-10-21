@@ -65,7 +65,7 @@ class RuleBasedController:
             return False
 
         steps_needed = ev_steps_needed_to_reach_target(observation["ev_soc"])
-        deadline_is_urgent = observation["steps_to_departure"] <= steps_needed + 1
+        deadline_is_urgent = observation["expected_steps_to_departure"] <= steps_needed + 1
 
         has_solar_surplus = observation["solar_kwh"] > observation["load_kwh"]
         battery_is_full = observation["battery_soc"] >= BATTERY_FULL_SOC

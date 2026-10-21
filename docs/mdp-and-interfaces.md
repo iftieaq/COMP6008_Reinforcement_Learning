@@ -1,6 +1,6 @@
 # MDP Specification and Shared Interfaces
 
-**Status:** v5, 21 October 2026 (v2: EV status based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11. v3: battery SOC in 10 bins and 400,000 training episodes, section 6. v4: new test seed range and development days, section 7; baseline charges the battery only on a worthwhile surplus, section 10. v5: value of energy left in the battery at the end of the day, section 5). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
+**Status:** v6, 21 October 2026 (v2: EV status based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11. v3: battery SOC in 10 bins and 400,000 training episodes, section 6. v4: new test seed range and development days, section 7; baseline charges the battery only on a worthwhile surplus, section 10. v5: value of energy left in the battery at the end of the day, section 5. v6: the agent sees the usual departure time, not the actual one, sections 4, 6 and 10; leftover value capped at the next night's need, section 5). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
 
 **Purpose:** a single reference for how the household environment works and how every component connects, so that the three agents, the baseline, the scenario generator and the analysis can be written in parallel and still fit together.
 
@@ -98,7 +98,7 @@ $$\text{import}_t = \max(0, \text{net}_t), \qquad \text{export}_t = \max(0, -\te
 
 **Where the randomness comes from.** The battery, EV and grid equations above are deterministic. All randomness in $p(s' \mid s, a)$ comes from the day profile: solar, load, EV arrival and departure times, EV arrival SOC, and the battery's starting SOC (section 7). None of these depend on the agent's actions.
 
-**Knowledge assumption.** At the start of step $t$ the agent observes the actual solar and load for step $t$, but nothing about later steps. This is a simplifying assumption to state in the report.
+**Knowledge assumptions.** At the start of step $t$ the agent observes the actual solar and load for step $t$, but nothing about later steps. For the EV it knows the charge level and the household's **usual** departure time (17:00), as set on the charger, but not the actual departure, which varies from day to day (section 7). On days the car leaves earlier than usual, the controller only finds out when it is gone. These are simplifying assumptions to state in the report.
 
 ---
 
@@ -106,7 +106,7 @@ $$\text{import}_t = \max(0, \text{net}_t), \qquad \text{export}_t = \max(0, -\te
 
 $$R_t = -\big(\text{import}_t \cdot p^\text{import}_t - \text{export}_t \cdot p^\text{export}_t\big) - \lambda_1 \big(E^\text{bat}_\text{charge} + E^\text{bat}_\text{discharge}\big) - \lambda_2\, \text{shortfall}_t - \lambda_3 \max\big(0,\ \text{import}_t - \text{threshold}\big) + \text{leftover}_t$$
 
-where $\text{leftover}_t = v \cdot E^\text{bat}_{48}$ at the last timestep ($t = 47$) and 0 at every other step.
+where $\text{leftover}_t = v \cdot \min(E^\text{bat}_{48},\ E_\text{night})$ at the last timestep ($t = 47$) and 0 at every other step. $E_\text{night}$ = 3.4 kWh is the nominal household load from 00:00 to 07:00, before solar covers demand again.
 
 | Term | Meaning |
 |---|---|
@@ -119,6 +119,8 @@ where $\text{leftover}_t = v \cdot E^\text{bat}_{48}$ at the last timestep ($t =
 Each part is also returned separately in `info` (section 8) so the analysis can show what drove the reward.
 
 **Why the leftover battery term.** The episode ends at midnight, but the house does not: energy left in the battery covers the next night's demand. Without this term the end of the day is worth nothing, and Q-learning learned to run the battery empty by midnight (0.05 kWh left on average, against 1.5 kWh for the baseline). About 1.5 kWh, worth roughly $0.45 a day, was used "for free", which was almost the whole of its apparent advantage over the baseline. The value $v$ is the import price ($0.30) minus the wear of discharging it later ($0.02), so keeping a kWh until tomorrow is worth the same as using it tonight. With this term, on 100 validation days at medium uncertainty, the baseline scores -2.57 and Q-learning -2.74 ± 0.14 (3 seeds).
+
+**Why the cap at the next night's need.** Without a cap, buying a kWh at $0.30 and holding it to midnight earned $0.28, so filling the battery from the grid in the evening was almost free. Some training runs did this and others did not, which made grid costs swing widely (for example $1.43 against $2.77 for nearly the same reward). Energy above about 3.4 kWh would be replaced by tomorrow's solar anyway, so it is given no value.
 
 ---
 
@@ -136,7 +138,7 @@ The environment returns real physical values as a dictionary (`gymnasium.spaces.
 | `load_kwh` | 0 or more | Household load this step |
 | `time_step` | 0 to 48 | Current timestep. 48 appears only in the final (terminal) observation |
 | `ev_plugged_in` | 0 or 1 | Whether the EV is plugged in this step |
-| `steps_to_departure` | 0 to 48 | Steps the EV can still charge, including this one. 0 when not plugged in. Equals 1 at the last plugged-in step |
+| `expected_steps_to_departure` | 0 to 48 | Steps until the household's **usual** departure time (17:00), at least 1 while plugged in. 0 when not plugged in. The car may actually leave earlier or later |
 
 The baseline and the metrics use these raw values.
 
@@ -154,7 +156,7 @@ A shared discretiser turns an observation into a tuple of bin numbers. That tupl
 
 **EV status and charging slack.** Charging slack is the number of steps the EV can still afford to skip charging:
 
-$$\text{slack} = \text{steps\_to\_departure} - \left\lceil \frac{(\text{target SOC} - \text{EV SOC}) \times 60\ \text{kWh}}{3.5\ \text{kWh per step}} \right\rceil$$
+$$\text{slack} = \text{expected\_steps\_to\_departure} - \left\lceil \frac{(\text{target SOC} - \text{EV SOC}) \times 60\ \text{kWh}}{3.5\ \text{kWh per step}} \right\rceil$$
 
 | EV status | Condition |
 |---|---|
@@ -168,6 +170,16 @@ $$\text{slack} = \text{steps\_to\_departure} - \left\lceil \frac{(\text{target S
 State key: `(battery_bin, solar_bin, load_bin, time_step, ev_status)`.
 
 **Why slack instead of the plan's separate EV SOC and deadline variables.** The first version used the plan's design: EV SOC in 5 bins plus a 3-level deadline (far, medium, near). With it, Q-learning met the EV target on only about 55% of test days (medium uncertainty, test reward about -6.3 against the baseline's -2.95), because 20% SOC bins and 3 deadline bins together cannot tell the agent whether the target is still reachable. Slack combines both into exactly that information. With slack, Q-learning met the target on about 99% of test days (test reward about -3.4 after 200,000 episodes). This is a documented design iteration for the report.
+
+**Why the usual departure time instead of the actual one.** Slack first used each day's actual departure, which assumes the controller knows exactly when the car will leave. In practice a charger knows the household's usual time, and the car sometimes leaves earlier. Since v6 the agent and the baseline both see only the usual departure (17:00); the car still leaves at its actual time, and any shortfall is penalised then. Results on 100 validation days (3 seeds for Q-learning):
+
+| Uncertainty | Baseline reward | Baseline EV met (on early-leave days) | Q-learning reward | Q-learning EV met (on early-leave days) |
+|---|---|---|---|---|
+| Low | -1.66 | 100% (100%) | -1.16 ± 0.04 | 100% (100%) |
+| Medium | -2.63 | 83% (66%) | -2.51 ± 0.13 | 99% (97%) |
+| High | -5.91 | 64% (31%) | -5.65 ± 0.06 | 91% (83%) |
+
+The baseline's fixed one-step margin fails when the car leaves early; Q-learning learns a larger safety margin from the shortfall penalties alone.
 
 **Why 10 battery bins instead of 5.** With 5 bins (20% wide), one charging step stores about 1.19 kWh, only 12% of the battery, so about half the time charging does not change the agent's state and it cannot see what charging achieved. Q-learning then barely used the battery (about 3.7 kWh charged per day against the baseline's 14.0) and lost on grid cost. Results on 100 held-out validation days (medium uncertainty, default hyperparameters, 3 seeds; baseline reward -3.21, cost $2.57):
 
@@ -334,7 +346,7 @@ The baseline makes two decisions each step using raw observations and the consta
 
 **EV decision.** Charge the EV if it is plugged in, below its target, and either:
 
-- the deadline is urgent: `steps_to_departure <= steps_needed + 1`, where `steps_needed` is the number of full-power charging steps needed to reach the target, rounded up; or
+- the deadline is urgent: `expected_steps_to_departure <= steps_needed + 1`, where `steps_needed` is the number of full-power charging steps needed to reach the target, rounded up; or
 - there is solar surplus (`solar_kwh > load_kwh`) and the home battery is full (SOC of at least 0.99).
 
 **Battery decision.**

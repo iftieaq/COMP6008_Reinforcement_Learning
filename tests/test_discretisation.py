@@ -13,14 +13,14 @@ from config import (
 from environment import discretise_observation, ev_steps_needed_to_reach_target, find_bin, find_ev_status
 
 
-def make_observation(ev_plugged_in=1, ev_soc=0.5, steps_to_departure=10):
+def make_observation(ev_plugged_in=1, ev_soc=0.5, expected_steps_to_departure=10):
     """
     Build an observation dict with typical values, overriding the EV fields.
 
     Args:
         ev_plugged_in: 0 or 1.
         ev_soc: EV state of charge.
-        steps_to_departure: steps the EV can still charge.
+        expected_steps_to_departure: steps until the usual departure time.
 
     Returns:
         Observation dict.
@@ -32,7 +32,7 @@ def make_observation(ev_plugged_in=1, ev_soc=0.5, steps_to_departure=10):
         "load_kwh": 0.25,
         "time_step": 24,
         "ev_plugged_in": ev_plugged_in,
-        "steps_to_departure": steps_to_departure,
+        "expected_steps_to_departure": expected_steps_to_departure,
     }
 
 
@@ -55,12 +55,12 @@ def test_steps_needed_to_reach_target():
 def test_ev_status_covers_every_case():
     assert find_ev_status(make_observation(ev_plugged_in=0)) == EV_STATUS_AWAY
     assert find_ev_status(make_observation(ev_soc=0.85)) == EV_STATUS_TARGET_MET
-    # ev_soc 0.5 needs 6 steps, so slack = steps_to_departure - 6
-    assert find_ev_status(make_observation(steps_to_departure=14)) == EV_STATUS_RELAXED
-    assert find_ev_status(make_observation(steps_to_departure=10)) == EV_STATUS_MODERATE
-    assert find_ev_status(make_observation(steps_to_departure=8)) == EV_STATUS_TIGHT
-    assert find_ev_status(make_observation(steps_to_departure=6)) == EV_STATUS_CRITICAL
-    assert find_ev_status(make_observation(steps_to_departure=2)) == EV_STATUS_CRITICAL
+    # ev_soc 0.5 needs 6 steps, so slack = expected_steps_to_departure - 6
+    assert find_ev_status(make_observation(expected_steps_to_departure=14)) == EV_STATUS_RELAXED
+    assert find_ev_status(make_observation(expected_steps_to_departure=10)) == EV_STATUS_MODERATE
+    assert find_ev_status(make_observation(expected_steps_to_departure=8)) == EV_STATUS_TIGHT
+    assert find_ev_status(make_observation(expected_steps_to_departure=6)) == EV_STATUS_CRITICAL
+    assert find_ev_status(make_observation(expected_steps_to_departure=2)) == EV_STATUS_CRITICAL
 
 
 def test_state_key_has_expected_shape():

@@ -29,7 +29,7 @@ def test_baseline_charges_battery_from_solar_surplus():
         "load_kwh": 0.3,
         "time_step": 24,
         "ev_plugged_in": 0,
-        "steps_to_departure": 0,
+        "expected_steps_to_departure": 0,
     }
     battery_command, charge_ev = ACTION_TABLE[RuleBasedController().act(observation)]
     assert battery_command == BATTERY_CHARGE
@@ -50,7 +50,7 @@ def test_baseline_does_not_charge_battery_on_tiny_surplus():
         "load_kwh": 0.5,
         "time_step": 14,
         "ev_plugged_in": 0,
-        "steps_to_departure": 0,
+        "expected_steps_to_departure": 0,
     }
     battery_command, charge_ev = ACTION_TABLE[RuleBasedController().act(observation)]
     assert battery_command != BATTERY_CHARGE

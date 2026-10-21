@@ -43,6 +43,8 @@ from config import (
     IMPORT_PRICE_PER_KWH,
     LEFTOVER_BATTERY_VALUE_PER_KWH,
     LOAD_BIN_EDGES_KWH,
+    NEXT_NIGHT_ENERGY_NEED_KWH,
+    NOMINAL_EV_DEPARTURE_STEP,
     NUMBER_OF_ACTIONS,
     PEAK_IMPORT_THRESHOLD_KWH,
     PEAK_IMPORT_WEIGHT,
@@ -83,7 +85,7 @@ class HouseholdEnergyEnv(gym.Env):
             "load_kwh": spaces.Box(low=0.0, high=np.inf, shape=(), dtype=np.float64),
             "time_step": spaces.Discrete(STEPS_PER_DAY + 1),
             "ev_plugged_in": spaces.Discrete(2),
-            "steps_to_departure": spaces.Discrete(STEPS_PER_DAY + 1),
+            "expected_steps_to_departure": spaces.Discrete(STEPS_PER_DAY + 1),
         })
 
         self.profile = None
@@ -287,18 +289,37 @@ class HouseholdEnergyEnv(gym.Env):
 
         Without this, energy left at midnight would be worth nothing to the
         agent, so it would learn to run the battery empty. In a real house that
-        energy covers the next night's demand.
+        energy covers the next night's demand. Only energy up to that need
+        counts: anything above it would be replaced by tomorrow's solar anyway,
+        and valuing it would reward filling the battery from the grid at night.
 
         Args:
             time_step: the current timestep.
 
         Returns:
-            Stored energy times LEFTOVER_BATTERY_VALUE_PER_KWH at the last
-            timestep of the day, else 0.
+            min(stored energy, NEXT_NIGHT_ENERGY_NEED_KWH) times
+            LEFTOVER_BATTERY_VALUE_PER_KWH at the last timestep, else 0.
         """
         if time_step != STEPS_PER_DAY - 1:
             return 0.0
-        return self.battery_energy_kwh * LEFTOVER_BATTERY_VALUE_PER_KWH
+        useful_energy_kwh = min(self.battery_energy_kwh, NEXT_NIGHT_ENERGY_NEED_KWH)
+        return useful_energy_kwh * LEFTOVER_BATTERY_VALUE_PER_KWH
+
+    def _expected_steps_to_departure(self, time_step):
+        """
+        Count the steps until the EV's usual departure time.
+
+        The agent is told the household's usual departure (17:00), not the
+        actual departure, which varies from day to day. If the EV is still
+        plugged in after the usual time, it reports 1 step left.
+
+        Args:
+            time_step: the current timestep.
+
+        Returns:
+            NOMINAL_EV_DEPARTURE_STEP - time_step, at least 1.
+        """
+        return max(1, NOMINAL_EV_DEPARTURE_STEP - time_step)
 
     def _get_observation(self):
         """
@@ -321,7 +342,7 @@ class HouseholdEnergyEnv(gym.Env):
                 "load_kwh": 0.0,
                 "time_step": time_step,
                 "ev_plugged_in": 0,
-                "steps_to_departure": 0,
+                "expected_steps_to_departure": 0,
             }
 
         ev_plugged_in = self._is_ev_plugged_in(time_step)
@@ -333,7 +354,7 @@ class HouseholdEnergyEnv(gym.Env):
             "load_kwh": float(self.profile.load_kwh[time_step]),
             "time_step": time_step,
             "ev_plugged_in": int(ev_plugged_in),
-            "steps_to_departure": self.profile.ev_departure_step - time_step if ev_plugged_in else 0,
+            "expected_steps_to_departure": self._expected_steps_to_departure(time_step) if ev_plugged_in else 0,
         }
 
 
@@ -378,7 +399,8 @@ def find_ev_status(observation):
     """
     Summarise the EV's situation as one value based on its charging slack.
 
-    Charging slack = steps until departure minus charging steps still needed.
+    Charging slack = expected steps until departure (the usual departure time)
+    minus charging steps still needed.
     It tells the agent how many steps it can afford to skip charging and
     still meet the target. 0 or less means it must charge every remaining step
     (or can no longer meet the target).
@@ -397,7 +419,7 @@ def find_ev_status(observation):
     if steps_needed == 0:
         return EV_STATUS_TARGET_MET
 
-    charging_slack = observation["steps_to_departure"] - steps_needed
+    charging_slack = observation["expected_steps_to_departure"] - steps_needed
     if charging_slack >= EV_RELAXED_MIN_SLACK:
         return EV_STATUS_RELAXED
     if charging_slack >= EV_MODERATE_MIN_SLACK:

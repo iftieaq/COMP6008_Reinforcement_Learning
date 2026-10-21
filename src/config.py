@@ -58,7 +58,7 @@ EV_MAX_ENERGY_PER_STEP_KWH = EV_CHARGER_POWER_KW * STEP_HOURS
 EV_TARGET_SOC = 0.8
 
 NOMINAL_EV_ARRIVAL_STEP = 18    # 09:00
-NOMINAL_EV_DEPARTURE_STEP = 34  # 17:00
+NOMINAL_EV_DEPARTURE_STEP = 34  # 17:00, also the usual departure the agent is told about
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +81,8 @@ PEAK_IMPORT_WEIGHT = 0.50    # lambda_3, $ per kWh imported above the peak thres
 
 # Energy left in the battery at midnight saves buying it the next night, minus the wear of using it
 LEFTOVER_BATTERY_VALUE_PER_KWH = IMPORT_PRICE_PER_KWH[0] - BATTERY_WEAR_WEIGHT
+# Only energy the house needs before solar returns counts (nominal load 00:00 to 07:00)
+NEXT_NIGHT_ENERGY_NEED_KWH = 3.4
 
 
 # ---------------------------------------------------------------------------
