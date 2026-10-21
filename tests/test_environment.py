@@ -138,3 +138,10 @@ def test_passes_gymnasium_environment_checker():
         # Solar and load have no fixed upper limit, so their maximum is infinity on purpose
         warnings.filterwarnings("ignore", message=".*maximum value is infinity.*")
         check_env(HouseholdEnergyEnv("medium"))
+
+
+def test_test_days_differ_from_development_days():
+    from scenarios import generate_development_profiles, generate_test_profiles
+    development_day = generate_development_profiles("medium", 1)[0]
+    test_day = generate_test_profiles("medium", 1)[0]
+    assert development_day.ev_arrival_soc != test_day.ev_arrival_soc

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from config import (
+    DEVELOPMENT_SEED_START,
     EV_TARGET_SOC,
     NOMINAL_EV_ARRIVAL_STEP,
     NOMINAL_EV_DEPARTURE_STEP,
@@ -163,22 +164,51 @@ def generate_day_profile(uncertainty_level, random_generator):
     )
 
 
-def generate_test_profiles(uncertainty_level, number_of_days=NUMBER_OF_TEST_DAYS):
+def generate_fixed_profiles(uncertainty_level, number_of_days, seed_start):
     """
-    Generate the fixed test days for one uncertainty level.
+    Generate a fixed, repeatable list of days.
 
-    Each test day uses its own seed starting at TEST_SEED_START, so the test
-    set is identical on every run and never overlaps with training.
+    Each day uses its own seed (seed_start, seed_start + 1, ...), so the list
+    is identical on every run and does not overlap with training.
 
     Args:
         uncertainty_level: "low", "medium" or "high".
-        number_of_days: how many test days to generate.
+        number_of_days: how many days to generate.
+        seed_start: seed of the first day.
 
     Returns:
         List of DayProfile objects.
     """
-    test_profiles = []
+    profiles = []
     for day_index in range(number_of_days):
-        random_generator = np.random.default_rng(TEST_SEED_START + day_index)
-        test_profiles.append(generate_day_profile(uncertainty_level, random_generator))
-    return test_profiles
+        random_generator = np.random.default_rng(seed_start + day_index)
+        profiles.append(generate_day_profile(uncertainty_level, random_generator))
+    return profiles
+
+
+def generate_development_profiles(uncertainty_level, number_of_days=NUMBER_OF_TEST_DAYS):
+    """
+    Generate the development days, used for quick checks while building.
+
+    Args:
+        uncertainty_level: "low", "medium" or "high".
+        number_of_days: how many days to generate.
+
+    Returns:
+        List of DayProfile objects, seeded from DEVELOPMENT_SEED_START.
+    """
+    return generate_fixed_profiles(uncertainty_level, number_of_days, DEVELOPMENT_SEED_START)
+
+
+def generate_test_profiles(uncertainty_level, number_of_days=NUMBER_OF_TEST_DAYS):
+    """
+    Generate the test days, used only for the final comparison.
+
+    Args:
+        uncertainty_level: "low", "medium" or "high".
+        number_of_days: how many days to generate.
+
+    Returns:
+        List of DayProfile objects, seeded from TEST_SEED_START.
+    """
+    return generate_fixed_profiles(uncertainty_level, number_of_days, TEST_SEED_START)

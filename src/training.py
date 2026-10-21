@@ -197,7 +197,7 @@ if __name__ == "__main__":
     from config import DEFAULT_AGENT_SETTINGS, DEFAULT_TRAINING_EPISODES, NUMBER_OF_ACTIONS
     from environment import HouseholdEnergyEnv
     from q_learning import QLearningAgent
-    from scenarios import generate_test_profiles
+    from scenarios import generate_development_profiles
 
     uncertainty_level = "medium"
     env = HouseholdEnergyEnv(uncertainty_level)
@@ -213,13 +213,13 @@ if __name__ == "__main__":
         block_mean = np.mean(rewards[block_start:block_start + block_size])
         print(f"Episodes {block_start:>6} to {block_start + block_size:>6}: mean reward {block_mean:8.3f}")
 
-    test_profiles = generate_test_profiles(uncertainty_level)
+    development_profiles = generate_development_profiles(uncertainty_level)
     controllers = {
         "Rule-based baseline": RuleBasedController(),
         "Q-learning": GreedyAgentController(agent),
     }
     for name, controller in controllers.items():
-        summary = average_results(evaluate_controller(env, controller, test_profiles))
+        summary = average_results(evaluate_controller(env, controller, development_profiles))
         print(f"\n{name}")
         for key, value in summary.items():
             print(f"  {key:>22}: {value:8.3f}")

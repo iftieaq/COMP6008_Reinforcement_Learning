@@ -1,6 +1,6 @@
 # MDP Specification and Shared Interfaces
 
-**Status:** v3, 21 October 2026 (v2: EV status based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11. v3: battery SOC in 10 bins and 400,000 training episodes, section 6). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
+**Status:** v3, 21 October 2026 (v2: EV status based on charging slack, section 6; `scenarios.py` moved before `environment.py`, section 11. v3: battery SOC in 10 bins and 400,000 training episodes, section 6. v4: new test seed range and development days, section 7; baseline charges the battery only on a worthwhile surplus, section 10). Once the team agrees, this is frozen. Any later change must be announced to the whole team, because the environment, agents, baseline and analysis all depend on it.
 
 **Purpose:** a single reference for how the household environment works and how every component connects, so that the three agents, the baseline, the scenario generator and the analysis can be written in parallel and still fit together.
 
@@ -224,9 +224,16 @@ Under high uncertainty some days cannot meet the EV target (for example, arrivin
 ### Training and test days
 
 - Training episodes generate a new random day each episode from the run's random number generator.
-- The test set is a fixed list of days generated from seeds that training never uses (proposed: 200 days from seeds 1,000,000 to 1,000,199 per uncertainty level).
-- Every controller (baseline and all agents) is evaluated on exactly the same test days.
-- Test days must never be used for tuning.
+- Three fixed sets of days, each generated from its own seed range that training never uses (200 days per uncertainty level unless stated):
+
+| Set | Seeds | Used for |
+|---|---|---|
+| Development days | from 1,000,000 | Quick checks while building (for example `python src/training.py`) |
+| Validation days | from 2,000,000 (100 days) | Scoring hyperparameter tuning runs |
+| Test days | from 3,000,000 | The final comparison only |
+
+- Every controller (baseline and all agents) is evaluated on exactly the same days.
+- Test days must never be used for tuning or design decisions. The first version of this spec used seeds from 1,000,000 as test days; those days were used to compare state designs (section 6), so they were retired to development days and a fresh test range was created.
 
 ---
 
@@ -326,11 +333,17 @@ The baseline makes two decisions each step using raw observations and the consta
 
 **Battery decision.**
 
-- If there is solar surplus and the battery is not full: charge.
+- If the solar surplus (`solar_kwh - load_kwh`) is more than 0.3 kWh and the battery is not full: charge.
 - Otherwise, if the house needs energy this step (`load_kwh` plus any EV charging is more than `solar_kwh`) and the battery is not empty: discharge.
 - Otherwise: idle.
 
 The two decisions are combined into one of the six action IDs. In words: use solar first, store surplus in the battery before the EV, use the battery before the grid, and switch to the EV whenever its deadline becomes urgent.
+
+**Why the 0.3 kWh surplus threshold.** The battery always charges at full power (1.25 kWh per step), so any part not covered by surplus solar $s$ is bought from the grid. Charging is worth it only if the value of the stored energy beats its cost:
+
+$$\underbrace{0.95 \times 1.25 \times 0.30}_{\text{stored energy, used later}} > \underbrace{0.30\,(1.25 - s)}_{\text{grid top-up}} + \underbrace{0.05\,s}_{\text{lost export}} + \underbrace{0.02\,(1.25 + 0.95 \times 1.25)}_{\text{wear in and out}}$$
+
+which holds when $s$ is more than about 0.27 kWh, rounded to 0.3. The first version charged on any surplus, which made the baseline buy grid energy to fill the battery whenever solar was barely above load (mostly 07:00 to 09:00). Fixing this strengthens the baseline (development check, medium uncertainty, 100 validation days: reward -3.21 to -2.99, grid cost $2.57 to $2.38, EV target still met on every day). A second candidate change, not letting the battery supply EV charging unless the deadline is urgent, was tested and rejected because it made the baseline worse (reward -3.78).
 
 ---
 

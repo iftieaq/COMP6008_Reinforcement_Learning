@@ -21,6 +21,7 @@ from environment import ev_steps_needed_to_reach_target, find_action_id
 
 BATTERY_FULL_SOC = 0.99
 BATTERY_EMPTY_SOC = 0.01
+MIN_SURPLUS_TO_CHARGE_BATTERY_KWH = 0.3   # below this, charging at full power loses money
 
 
 class RuleBasedController:
@@ -75,8 +76,14 @@ class RuleBasedController:
         """
         Decide what the home battery does this step.
 
-        Charge on solar surplus, discharge if the house needs energy that solar
-        does not cover, otherwise stay idle.
+        Charge when the solar surplus is large enough to be worth storing,
+        discharge if the house needs energy that solar does not cover,
+        otherwise stay idle.
+
+        The battery always charges at full power (1.25 kWh per step), so any
+        part not covered by surplus solar is bought from the grid. Below
+        MIN_SURPLUS_TO_CHARGE_BATTERY_KWH the grid top-up, charging loss and
+        wear cost more than the stored energy saves later.
 
         Args:
             observation: observation dict.
@@ -90,10 +97,10 @@ class RuleBasedController:
         battery_soc = observation["battery_soc"]
 
         ev_demand_kwh = EV_MAX_ENERGY_PER_STEP_KWH if charge_ev else 0.0
-        has_solar_surplus = solar_kwh > load_kwh
+        surplus_is_worth_storing = solar_kwh - load_kwh > MIN_SURPLUS_TO_CHARGE_BATTERY_KWH
         house_needs_energy = load_kwh + ev_demand_kwh > solar_kwh
 
-        if has_solar_surplus and battery_soc < BATTERY_FULL_SOC:
+        if surplus_is_worth_storing and battery_soc < BATTERY_FULL_SOC:
             return BATTERY_CHARGE
         if house_needs_energy and battery_soc > BATTERY_EMPTY_SOC:
             return BATTERY_DISCHARGE

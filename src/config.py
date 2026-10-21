@@ -136,7 +136,8 @@ UNCERTAINTY_LEVELS = {
 # Test days (seeds that training never uses)
 # ---------------------------------------------------------------------------
 
-TEST_SEED_START = 1_000_000
+DEVELOPMENT_SEED_START = 1_000_000   # for quick checks while developing
+TEST_SEED_START = 3_000_000          # only for the final comparison
 NUMBER_OF_TEST_DAYS = 200
 
 
